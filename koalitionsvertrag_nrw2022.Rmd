@@ -1,0 +1,102 @@
+---
+title: "Wissenschaftliches Programmieren mit R"
+subtitle: "Der Koalitionsvertrag 2021 als Wortwolke"
+author: "Andreas Blaette"
+date: "23. Juni 2022"
+output: 
+  xaringan::moon_reader:
+    css: ["./css/default.css", "./css/metropolis.css", "./css/robot-fonts.css", './css/polminify.css']
+    nature:
+      countIncrementalSlides: false
+editor_options:
+  chunk_output_type: console
+---
+
+
+# Laden von Bibliotheken
+
+Unser Ziel ist, den Koalitionsvertrag in die Form einer Wortwolke zu gießen. Wie
+machen wir das? Wir zunächst ein paar Bibliotheken ...
+
+```{r, warning = TRUE, message = FALSE}
+library(pdftools)
+library(tokenizers)
+library(dplyr)
+library(data.table)
+library(wordcloud2)
+library(magrittr)
+```
+
+... und holen uns den Koalitionsvertrag aus dem Netz.
+
+```{r}
+url <- "https://gruene-nrw.de/dateien/Zukunftsvertrag_CDU-GRUeNE_Vorder-und-Rueckseite.pdf"
+local <- tempfile()
+download.file(url = url, destfile = local)
+```
+
+Diesen haben wir jetzt lokal in einer temporären Datei.
+
+---
+
+# Stopwords
+
+Weil wir wählerisch sind, definieren wir Stopwörter, die uns nicht interessieren. 
+
+```{r}
+drop <- c(
+  tm::stopwords("de"),
+  paste(
+    toupper(substr(tm::stopwords("de"), 1, 1)), 
+    substr(tm::stopwords("de"), 2, nchar(tm::stopwords("de"))),
+    sep = ""
+  ),
+  "dass", "sowie", "insbesondere", "beim"
+)
+```
+
+Es macht es etwas komplizierter,  ist aber für die deutsche Sprache adäquat: Wir
+machen hier nicht die Groß- und Kleinschreibung platt. Wer entziffert wie der
+Code das macht?
+
+---
+
+# Text befreien - Tokenisieren - Zählen
+
+Wir befreien den Text aus dem pdf-Dokument, zerlegen den in Wörter und werfen
+dabei die Stopwörter weg. Daraus machen wir dann eine Tabelle...
+
+```{r}
+txt <- pdftools::pdf_text(local) %>%
+  tokenizers::tokenize_words(lowercase = FALSE, stopwords = drop) %>%
+  unlist() %>%
+  data.table(word = .)
+```
+
+Das mag man mir verzeihen: Ich bin ein Freund der `data.table`-Tabellen. Wir
+zählen jetzt und bringen die Tabelle in eine gut verdaubare Form.
+
+```{r}
+txt_min <- txt[!grepl("^\\d+$", word)]
+cnt <- txt_min[, .N, by = "word"]
+setorderv(cnt, cols = "N", order = -1L)
+setnames(cnt, old = "N", new = "freq")
+```
+
+Damit haben wir schnell und dreckig - besser geht immer - die Grundlage für eine durchsuchbare Tabelle. Und für die obligatorische Wortwolke.
+
+---
+
+# Eine durchsuchbare Tabelle
+
+```{r, echo = FALSE, warning = FALSE}
+DT::datatable(cnt)
+```
+
+---
+
+# Wortwolke "Zukunftsvertrag" NRW 2022 
+
+```{r, echo = FALSE, fig.align = "center", fig.width = 11}
+wordcloud2(data = cnt[1:500], size = 1.2)
+```
